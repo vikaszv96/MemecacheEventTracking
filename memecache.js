@@ -1,4 +1,3 @@
-
 var express = require("express");
 var Memcached = require('memcached');
 var app = express();
@@ -16,130 +15,96 @@ else {
   console.log('Trigerring.......(events...)');
   console.log('wait for 10 seconds.......(approximation)');
   console.log("===============================================================================================================================================================");
-}
-});
+
 // Object to store in the memcached.....
-var counterClick = 0, counterSignup = 0, counterASignup = 0, counterBSignup = 0, counterAClick = 0, counterBClick = 0;
-var signup = new Array(), click = new Array();
-var signups, clicks;
-var N = 5, events = 100;
+var n = 20, x = 10, time = 10000;
+//n = number of events
+//x = number of tracking ids
 
-asyncCall();
+var events = [], obj;
+obj = {
+totalEventsCaptured: 0,
+eventsCapturedByTrackingIds:{
+},
+"timestamp":new Date()
+};
 
-async function asyncCall() {
- console.log('calling');
- await resolveAfterPost();
+for(var i=0;i<n;i++)
+{
+  events.push(JSON.parse(JSON.stringify(obj)));
+}
+events.forEach((item, i) => {
+  for(var i=0;i<x;i++)
+  item.eventsCapturedByTrackingIds["trackID"+i] = 0;
+});
+// console.log("events formed = "+ JSON.stringify(events));
+//end formation
+
+function randomInteger(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
- function resolveAfterPost() {
- setInterval(function(){
-for(var i = 1; i<= events; i++)
-{
-var chosenEvent =  Math.random() < 0.5 ? "signup" : "click";
-var chosenTrackingId =  Math.random() < 0.5 ? "TrackA" : "TrackB";
+setInterval(function() {
+// console.log("setInterval Entered!");
+var randomEventCount = randomInteger(1,n); //11
+// console.log("randomEventCount = "+ randomEventCount);
+var eventSorted = [], trackIDsSorted = [];
 
-if(chosenEvent == "signup" && chosenTrackingId == "TrackA")
-{
-var s = "signup";
-counterASignup++;
-counterSignup++;
+while(eventSorted.length < randomEventCount){
+    var r = Math.floor(Math.random() * n) + 1;
+    if(eventSorted.indexOf(r) === -1)
+     eventSorted.push(r);
 }
-else if(chosenEvent == "signup" && chosenTrackingId == "TrackB")
+
+// console.log("eventSorted = "+ JSON.stringify(eventSorted));
+
+for(var i=0; i<randomEventCount; i++)
 {
-var s = "signup";
-counterBSignup++;
-counterSignup++;
+  var randomTrackIDCount = randomInteger(1, x);
+  // console.log("randomTrackIDCount = "+ randomTrackIDCount);
+    events[eventSorted[i]-1].totalEventsCaptured = events[eventSorted[i]-1].totalEventsCaptured + randomTrackIDCount;
+    // console.log("events[eventSorted[i]].totalEventsCaptured = "+events[eventSorted[i]-1].totalEventsCaptured);
+  while(trackIDsSorted.length < randomTrackIDCount){
+      var r = Math.floor(Math.random() * x) + 1;
+      r = r - 1;
+         events[eventSorted[i]-1].eventsCapturedByTrackingIds["trackID"+r] ++;
+         // console.log("events[eventSorted["+i+"]-1].eventsCapturedByTrackingIds[trackID"+r+"] = "+ events[eventSorted[i]-1].eventsCapturedByTrackingIds["trackID"+r]);
+      trackIDsSorted.push(r);
+    }
+    // console.log("trackIDsSorted = "+ JSON.stringify(trackIDsSorted));
+    trackIDsSorted = [];
 }
-else if(chosenEvent == "click" && chosenTrackingId == "TrackA")
-{
-var s = "click";
-counterAClick++;
-counterClick++;
-}
+
+memcached.set('events', events, 100000, function (err, success) {
+if(err) throw new err;
 else {
-var s = "click";
-counterBClick++;
-counterClick++;
+  console.log("Some Events triggered just now!");
 }
-
-
- signups = {
- totalEventsCaptured: counterSignup,
- eventsCapturedByTrackingIds:{
- "INF-yj562hjojzbtez": counterASignup,
- "INF-3gbfcjjsd6vhvo": counterBSignup,
-},
-"timestamp":new Date()
-};
-
- clicks = {
- totalEventsCaptured: counterClick,
- eventsCapturedByTrackingIds:{
- "INF-yj562hjojzbtez": counterAClick,
- "INF-3gbfcjjsd6vhvo": counterBClick
-},
-"timestamp":new Date()
-};
-
-if(chosenEvent == 'signup')
-{
-  signup.push(signups);
-  memcached.set('signup', signup, 100000, function (err,success) {
-if(err) throw new err;
-
 });
-}
+},  1000)
 
-if(chosenEvent == 'click')
-{
-  click.push(clicks);
-  memcached.set('click', click, 100000, function (err, success) {
-if(err) throw new err;
-});
-}
-}
-}, 1000);
-}
+console.log("Total Events = "+n);
+console.log("Total Tracking IDs = "+x);
+console.log("===============================================================================================================================================================");
 
 setInterval(function(){
   resolveAfterGet();
-}, 10000)
+}, time)
 
 
 async function resolveAfterGet (){
-  // method to get saved data....
-  var d = new Date();
-  var dDupl = new Date();
-  d.setMinutes(d.getMinutes() - N);
-  var newSignup = new Array();
-  var newClick = new Array();
+  // method to get saved data...
 
-
-  await memcached.get('signup', function (err, data) {
-    data.forEach(element => {
-      if(new Date(element.timestamp) > d)
-      {
-      newSignup.push(element);
-      }
+  await memcached.get('events', function (err, data) {
+      data.forEach((item, i) => {
+      console.log("Data captured for all events and event type, from last "+(time/1000)+" seconds");
+      console.log("EVENT_"+i+" = "+ JSON.stringify(item));
+      console.log("===============================================================================================================================================================");
     });
-    console.log("Data captured for SIGNUP event type, from last "+N+" minutes starting from "+ d +" to "+ dDupl +" out of total events triggered in this period ===> ");
-     console.log("signup = "+ JSON.stringify(newSignup[newSignup.length-1]));
-    console.log("===============================================================================================================================================================");
-  });
-
-  await memcached.get('click', function (err, data) {
-    data.forEach(element => {
-    if(new Date(element.timestamp) > d)
-    {
-    newClick.push(element);
-    }
-  });
-  console.log("Data captured for CLICK event type, from last "+N+" minutes starting from "+ d +" to "+ dDupl +" out of total events triggered in this period ===> ");
-  console.log("click = "+ JSON.stringify(newClick[newClick.length-1]));
-  console.log("===============================================================================================================================================================");
-  });
+    });
 }
-
+}
+});
 app.listen(4000,function(){
 console.log("Server running on port 4000");
 });
